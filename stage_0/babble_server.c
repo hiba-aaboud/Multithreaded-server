@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
     }
 
     server_data_init();
-    
+        
     if((sockfd = server_connection_init(portno)) == -1){
         return -1;
     }
