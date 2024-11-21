@@ -174,10 +174,10 @@ void *communication_thread(void *arg)
     char *recv_buff = NULL;
     command_t *cmd;
     answer_t *answer = NULL;
-    unsigned long cl_key=0;
-    char client_name[BABBLE_ID_SIZE+1];
+    unsigned long cl_key = 0;
+    char client_name[BABBLE_ID_SIZE + 1];
 
-    memset(client_name, 0, BABBLE_ID_SIZE+1);
+    memset(client_name, 0, BABBLE_ID_SIZE + 1);
     // Handle login command
     if (network_recv(sockfd, (void **)&recv_buff) > 0)
     {
