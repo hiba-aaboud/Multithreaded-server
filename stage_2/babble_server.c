@@ -25,14 +25,13 @@ static command_t *command_buffer[BABBLE_BUFFER_SIZE];
 static int buffer_head = 0;
 static int buffer_tail = 0;
 
-/* Synchronization primitives for buffer */
+// Synchronization primitives for buffer 
 pthread_mutex_t buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t buffer_not_empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t buffer_not_full = PTHREAD_COND_INITIALIZER;
 
 pthread_t executor_threads[BABBLE_EXECUTOR_THREADS];
 
-/* Flag for random delay activation */
 int random_delay_activated = 0;
 
 static void display_help(char *exec)
@@ -44,10 +43,8 @@ static int parse_command(char *str, command_t *cmd)
 {
     char *name = NULL;
 
-    /* start by cleaning the input */
     str_clean(str);
 
-    /* get command id */
     cmd->cid = str_to_command(str, &cmd->answer_expected);
 
     switch (cmd->cid)
@@ -256,7 +253,6 @@ void *communication_thread(void *arg)
     return NULL;
 }
 
-/* Executor thread function */
 void *executor_thread(void *arg)
 {
     fastRandomSetSeed(time(NULL) + pthread_self() * 100);
@@ -272,7 +268,21 @@ void *executor_thread(void *arg)
         pthread_mutex_unlock(&buffer_mutex);
 
         answer_t *answer = NULL;
-        if (process_command(cmd, &answer) == -1)
+        int res = process_command(cmd, &answer);
+        
+        // Decrement cmd_on_wait if the command is associated with a client
+        if (cmd->cid != UNREGISTER && cmd->cid != LOGIN)
+        {
+            client_bundle_t *client = registration_lookup(cmd->key);
+            if (client != NULL)
+            {
+                pthread_mutex_lock(&client->cmdlock);
+                client->cmd_on_wait--;
+                pthread_mutex_unlock(&client->cmdlock);
+            }
+        }
+
+        if (res == -1)
         {
             fprintf(stderr, "Warning: unable to process command\n");
         }
