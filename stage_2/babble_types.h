@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 #include "babble_config.h"
 
@@ -39,8 +40,10 @@ typedef struct client_bundle{
     unsigned int disconnected; /* set to 1 when client has
                                 * disconnected */
     pthread_mutex_t flock; // lock for followers list
-    pthread_mutex_t cmdlock; // lock for cmds
-    int cmd_on_wait; // list of cmds pending
+    int cmd_on_wait; // counter of cmds pending
+    pthread_mutex_t cmdlock; // to protect the counter
+    sem_t cmd_sem; 
+    
 
 } client_bundle_t;
 

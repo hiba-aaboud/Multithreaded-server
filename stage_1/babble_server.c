@@ -20,17 +20,14 @@
 #include "fastrand.h"
 #include "babble_config.h"
 
-/* Command buffer for producer-consumer model */
-static command_t *command_buffer[BABBLE_BUFFER_SIZE];
-static int buffer_head = 0;
-static int buffer_tail = 0;
+static command_t *cmd_buff[BABBLE_BUFFER_SIZE];
+static int buff_start = 0;
+static int buff_end = 0;
 
-/* Synchronization primitives for buffer */
-pthread_mutex_t buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t buff_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t buffer_not_empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t buffer_not_full = PTHREAD_COND_INITIALIZER;
 
-/* Flag for random delay activation */
 int random_delay_activated = 0;
 
 static void display_help(char *exec)
@@ -142,31 +139,31 @@ static int process_command(command_t *cmd, answer_t **answer)
     return res;
 }
 
-/* Buffer Operations */
-void add_command_to_buffer(command_t *cmd)
+// buff opps
+void add_to_buff(command_t *cmd)
 {
-    command_buffer[buffer_tail] = cmd;
-    buffer_tail = (buffer_tail + 1) % BABBLE_BUFFER_SIZE;
+    cmd_buff[buff_end] = cmd;
+    buff_end = (buff_end + 1) % BABBLE_BUFFER_SIZE;
 }
 
-command_t *remove_command_from_buffer()
+command_t *rmv_from_buff()
 {
-    command_t *cmd = command_buffer[buffer_head];
-    buffer_head = (buffer_head + 1) % BABBLE_BUFFER_SIZE;
+    command_t *cmd = cmd_buff[buff_start];
+    buff_start = (buff_start + 1) % BABBLE_BUFFER_SIZE;
     return cmd;
 }
 
-int is_buffer_full()
+int is_buff_full()
 {
-    return ((buffer_tail + 1) % BABBLE_BUFFER_SIZE) == buffer_head;
+    return ((buff_end + 1) % BABBLE_BUFFER_SIZE) == buff_start;
 }
 
-int is_buffer_empty()
+int is_buff_empty()
 {
-    return buffer_head == buffer_tail;
+    return buff_start == buff_end;
 }
 
-/* Communication thread function */
+// comm thread func
 void *communication_thread(void *arg)
 {
     int sockfd = *(int *)arg;
@@ -178,7 +175,6 @@ void *communication_thread(void *arg)
     char client_name[BABBLE_ID_SIZE + 1];
 
     memset(client_name, 0, BABBLE_ID_SIZE + 1);
-    // Handle login command
     if (network_recv(sockfd, (void **)&recv_buff) > 0)
     {
         cmd = new_command(0);
@@ -216,7 +212,6 @@ void *communication_thread(void *arg)
         free(recv_buff);
     }
 
-    // Process subsequent client commands
     while (network_recv(sockfd, (void **)&recv_buff) > 0)
     {
         cmd = new_command(cl_key);
@@ -230,14 +225,14 @@ void *communication_thread(void *arg)
         }
         else
         {
-            pthread_mutex_lock(&buffer_mutex);
-            while (is_buffer_full())
+            pthread_mutex_lock(&buff_mutex);
+            while (is_buff_full())
             {
-                pthread_cond_wait(&buffer_not_full, &buffer_mutex);
+                pthread_cond_wait(&buffer_not_full, &buff_mutex);
             }
-            add_command_to_buffer(cmd);
+            add_to_buff(cmd);
             pthread_cond_signal(&buffer_not_empty);
-            pthread_mutex_unlock(&buffer_mutex);
+            pthread_mutex_unlock(&buff_mutex);
         }
         free(recv_buff);
     }
@@ -260,14 +255,14 @@ void *executor_thread(void *arg)
     fastRandomSetSeed(time(NULL) + pthread_self() * 100);
     while (1)
     {
-        pthread_mutex_lock(&buffer_mutex);
-        while (is_buffer_empty())
+        pthread_mutex_lock(&buff_mutex);
+        while (is_buff_empty())
         {
-            pthread_cond_wait(&buffer_not_empty, &buffer_mutex);
+            pthread_cond_wait(&buffer_not_empty, &buff_mutex);
         }
-        command_t *cmd = remove_command_from_buffer();
+        command_t *cmd = rmv_from_buff();
         pthread_cond_signal(&buffer_not_full);
-        pthread_mutex_unlock(&buffer_mutex);
+        pthread_mutex_unlock(&buff_mutex);
 
         answer_t *answer = NULL;
         if (process_command(cmd, &answer) == -1)
@@ -311,7 +306,7 @@ int main(int argc, char *argv[])
     // Initialize server data structures
     server_data_init();
 
-    // Start the executor thread
+    // start exec thread
     pthread_create(&executor_tid, NULL, executor_thread, NULL);
 
     // Initialize and open the server socket
@@ -324,10 +319,6 @@ int main(int argc, char *argv[])
     // Main server loop
     while (1)
     {
-        // newsockfd = server_connection_accept(sockfd);
-        // if (newsockfd == -1) {
-        //     continue;
-        // }
         if ((newsockfd = server_connection_accept(sockfd)) == -1)
         {
             return -1;
